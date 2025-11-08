@@ -38,6 +38,8 @@ struct CloudModelCardView: View {
             return "Mistral"
         case .gemini:
             return "Gemini"
+        case .openAI:
+            return "OpenAI"
         case .soniox:
             return "Soniox"
         default:
@@ -283,6 +285,8 @@ struct CloudModelCardView: View {
             aiService.selectedProvider = .mistral
         case .gemini:
             aiService.selectedProvider = .gemini
+        case .openAI:
+            aiService.selectedProvider = .openAI
         case .soniox:
             aiService.selectedProvider = .soniox
         default:

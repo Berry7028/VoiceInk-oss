@@ -275,6 +275,18 @@ import Foundation
             accuracy: 0.96,
             isMultilingual: true,
             supportedLanguages: getLanguageDictionary(isMultilingual: true, provider: .soniox)
+        ),
+
+        // OpenAI Models
+        CloudModel(
+            name: "whisper-1",
+            displayName: "Whisper-1 (OpenAI)",
+            description: "OpenAI's Whisper model for accurate speech recognition across multiple languages.",
+            provider: .openAI,
+            speed: 0.75,
+            accuracy: 0.96,
+            isMultilingual: true,
+            supportedLanguages: getLanguageDictionary(isMultilingual: true, provider: .openAI)
         )
      ]
  
