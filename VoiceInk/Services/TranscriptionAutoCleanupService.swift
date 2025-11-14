@@ -2,7 +2,6 @@ import Foundation
 import SwiftData
 import OSLog
 
-@MainActor
 class TranscriptionAutoCleanupService {
     static let shared = TranscriptionAutoCleanupService()
 
@@ -83,7 +82,7 @@ class TranscriptionAutoCleanupService {
         }
     }
 
-    nonisolated private func sweepOldTranscriptions(modelContext: ModelContext) async {
+    private func sweepOldTranscriptions(modelContext: ModelContext) async {
         guard UserDefaults.standard.bool(forKey: keyIsEnabled) else {
             return
         }
@@ -94,7 +93,7 @@ class TranscriptionAutoCleanupService {
         let cutoffDate = Date().addingTimeInterval(TimeInterval(-effectiveMinutes * 60))
 
         do {
-            try await MainActor.run { [modelContext] in
+            try await MainActor.run {
                 let descriptor = FetchDescriptor<Transcription>(
                     predicate: #Predicate<Transcription> { transcription in
                         transcription.timestamp < cutoffDate
