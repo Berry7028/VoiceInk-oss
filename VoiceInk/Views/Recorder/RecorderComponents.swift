@@ -276,23 +276,33 @@ struct RecorderStatusDisplay: View {
     let currentState: RecordingState
     let audioMeter: AudioMeter
     let menuBarHeight: CGFloat?
-    
+
     init(currentState: RecordingState, audioMeter: AudioMeter, menuBarHeight: CGFloat? = nil) {
         self.currentState = currentState
         self.audioMeter = audioMeter
         self.menuBarHeight = menuBarHeight
     }
-    
+
     var body: some View {
         Group {
-            if currentState == .enhancing {
+            if currentState == .realtimeTranscribing {
+                VStack(spacing: 2) {
+                    Text("リアルタイム文字起こし中")
+                        .foregroundColor(.white)
+                        .font(.system(size: 11, weight: .medium, design: .default))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+
+                    ProgressAnimation(animationSpeed: 0.1)
+                }
+            } else if currentState == .enhancing {
                 VStack(spacing: 2) {
                     Text("Enhancing")
                         .foregroundColor(.white)
                         .font(.system(size: 11, weight: .medium, design: .default))
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
-                    
+
                     ProgressAnimation(animationSpeed: 0.15)
                 }
             } else if currentState == .transcribing {
@@ -302,7 +312,7 @@ struct RecorderStatusDisplay: View {
                         .font(.system(size: 11, weight: .medium, design: .default))
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
-                    
+
                     ProgressAnimation(animationSpeed: 0.12)
                 }
             } else if currentState == .recording {

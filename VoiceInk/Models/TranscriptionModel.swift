@@ -23,19 +23,27 @@ protocol TranscriptionModel: Identifiable, Hashable {
     var displayName: String { get }
     var description: String { get }
     var provider: ModelProvider { get }
-    
+
     // Language capabilities
     var isMultilingualModel: Bool { get }
     var supportedLanguages: [String: String] { get }
+
+    // Realtime transcription support
+    var supportsRealtimeTranscription: Bool { get }
 }
 
 extension TranscriptionModel {
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
-    
+
     var language: String {
         isMultilingualModel ? "Multilingual" : "English-only"
+    }
+
+    // Default implementation: most models don't support realtime transcription
+    var supportsRealtimeTranscription: Bool {
+        return false
     }
 }
 
@@ -48,6 +56,11 @@ struct NativeAppleModel: TranscriptionModel {
     let provider: ModelProvider = .nativeApple
     let isMultilingualModel: Bool
     let supportedLanguages: [String: String]
+
+    // Apple native models support realtime transcription using SFSpeechRecognizer
+    var supportsRealtimeTranscription: Bool {
+        return true
+    }
 }
 
 // A new struct for Parakeet models

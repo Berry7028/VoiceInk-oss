@@ -79,12 +79,32 @@ struct NotchRecorderView: View {
     var body: some View {
         Group {
             if windowManager.isVisible {
-                HStack(spacing: 0) {
-                    leftSection
-                    centerSection
-                    rightSection
+                VStack(spacing: 0) {
+                    // Realtime transcription display (only shown when in realtime mode)
+                    if whisperState.isRealtimeMode && whisperState.recordingState == .realtimeTranscribing {
+                        VStack(spacing: 4) {
+                            CompactRealtimeTranscriptionDisplay(whisperState: whisperState)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 8)
+
+                            RealtimeStopButton {
+                                Task {
+                                    await whisperState.toggleRealtimeRecord()
+                                }
+                            }
+                            .padding(.bottom, 8)
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
+                    // Main notch bar
+                    HStack(spacing: 0) {
+                        leftSection
+                        centerSection
+                        rightSection
+                    }
+                    .frame(height: menuBarHeight)
                 }
-                .frame(height: menuBarHeight)
                 .background(Color.black)
                 .mask {
                     NotchShape(cornerRadius: 10)

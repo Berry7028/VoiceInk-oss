@@ -33,24 +33,49 @@ struct MiniRecorderView: View {
     }
     
     private var contentLayout: some View {
-        HStack(spacing: 0) {
-            // Left button zone - always visible
-            RecorderPromptButton(activePopover: $activePopover)
-                .padding(.leading, 7)
+        VStack(spacing: 0) {
+            // Realtime transcription display (only shown when in realtime mode)
+            if whisperState.isRealtimeMode && whisperState.recordingState == .realtimeTranscribing {
+                VStack(spacing: 8) {
+                    RealtimeTranscriptionDisplay(whisperState: whisperState)
+                        .frame(maxHeight: 100)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 12)
 
-            Spacer()
+                    HStack {
+                        Spacer()
+                        RealtimeStopButton {
+                            Task {
+                                await whisperState.toggleRealtimeRecord()
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding(.bottom, 8)
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
 
-            // Fixed visualizer zone
-            statusView
-                .frame(maxWidth: .infinity)
+            // Main control bar
+            HStack(spacing: 0) {
+                // Left button zone - always visible
+                RecorderPromptButton(activePopover: $activePopover)
+                    .padding(.leading, 7)
 
-            Spacer()
+                Spacer()
 
-            // Right button zone - always visible
-            RecorderPowerModeButton(activePopover: $activePopover)
-                .padding(.trailing, 7)
+                // Fixed visualizer zone
+                statusView
+                    .frame(maxWidth: .infinity)
+
+                Spacer()
+
+                // Right button zone - always visible
+                RecorderPowerModeButton(activePopover: $activePopover)
+                    .padding(.trailing, 7)
+            }
+            .padding(.vertical, 9)
         }
-        .padding(.vertical, 9)
     }
     
     private var recorderCapsule: some View {

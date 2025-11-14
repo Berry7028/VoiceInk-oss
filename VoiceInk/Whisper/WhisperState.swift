@@ -11,6 +11,7 @@ enum RecordingState: Equatable {
     case idle
     case recording
     case transcribing
+    case realtimeTranscribing  // New state for realtime transcription
     case enhancing
     case busy
 }
@@ -73,6 +74,11 @@ class WhisperState: NSObject, ObservableObject {
     private lazy var cloudTranscriptionService = CloudTranscriptionService()
     private lazy var nativeAppleTranscriptionService = NativeAppleTranscriptionService()
     internal lazy var parakeetTranscriptionService = ParakeetTranscriptionService()
+    private lazy var realtimeTranscriptionService = RealtimeAppleTranscriptionService()
+
+    // Realtime transcription state
+    @Published var realtimeTranscriptionText: String = ""
+    @Published var isRealtimeMode: Bool = false
     
     private var modelUrl: URL? {
         let possibleURLs = [
@@ -141,6 +147,14 @@ class WhisperState: NSObject, ObservableObject {
     }
     
     func toggleRecord() async {
+        // Check if realtime transcription is supported by the current model
+        if let model = currentTranscriptionModel, model.supportsRealtimeTranscription {
+            // Use realtime transcription mode
+            await toggleRealtimeRecord()
+            return
+        }
+
+        // Otherwise, use traditional recording mode
         if recordingState == .recording {
             await recorder.stopRecording()
             if let recordedFile {
@@ -431,6 +445,245 @@ class WhisperState: NSObject, ObservableObject {
     }
 
     private func cleanupAndDismiss() async {
+        await dismissMiniRecorder()
+    }
+
+    // MARK: - Realtime Transcription Methods
+
+    /// Toggle realtime recording mode
+    func toggleRealtimeRecord() async {
+        if recordingState == .realtimeTranscribing {
+            // Stop realtime transcription
+            await stopRealtimeTranscription()
+        } else {
+            // Start realtime transcription
+            await startRealtimeTranscription()
+        }
+    }
+
+    /// Start realtime transcription
+    private func startRealtimeTranscription() async {
+        guard let model = currentTranscriptionModel else {
+            await MainActor.run {
+                NotificationManager.shared.showNotification(
+                    title: "モデルが選択されていません",
+                    type: .error
+                )
+            }
+            return
+        }
+
+        guard model.supportsRealtimeTranscription else {
+            logger.warning("Selected model does not support realtime transcription")
+            await MainActor.run {
+                NotificationManager.shared.showNotification(
+                    title: "選択されたモデルはリアルタイム文字起こしに対応していません",
+                    type: .error
+                )
+            }
+            return
+        }
+
+        // Request speech recognition authorization
+        let authorized = await realtimeTranscriptionService.requestAuthorization()
+        guard authorized else {
+            await MainActor.run {
+                NotificationManager.shared.showNotification(
+                    title: "音声認識の権限がありません",
+                    type: .error
+                )
+            }
+            return
+        }
+
+        // Prepare recording file
+        let fileName = "\(UUID().uuidString).wav"
+        let permanentURL = recordingsDirectory.appendingPathComponent(fileName)
+        recordedFile = permanentURL
+
+        // Get selected language
+        let selectedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") ?? "ja"
+
+        // Reset state
+        realtimeTranscriptionText = ""
+        isRealtimeMode = true
+        shouldCancelRecording = false
+
+        do {
+            // Start realtime transcription
+            try await realtimeTranscriptionService.startRealtimeTranscription(
+                language: selectedLanguage,
+                recordingURL: permanentURL,
+                onPartialResult: { [weak self] partialText in
+                    Task { @MainActor in
+                        self?.realtimeTranscriptionText = partialText
+                    }
+                },
+                onFinalResult: { [weak self] finalText in
+                    Task { @MainActor in
+                        self?.realtimeTranscriptionText = finalText
+                    }
+                },
+                onError: { [weak self] error in
+                    Task { @MainActor in
+                        self?.logger.error("Realtime transcription error: \(error.localizedDescription)")
+                        NotificationManager.shared.showNotification(
+                            title: "文字起こしエラー",
+                            type: .error
+                        )
+                        await self?.stopRealtimeTranscription()
+                    }
+                }
+            )
+
+            await MainActor.run {
+                recordingState = .realtimeTranscribing
+                SoundManager.shared.playStartSound()
+            }
+
+            // Apply PowerMode if enabled
+            await ActiveWindowService.shared.applyConfigurationForCurrentApp()
+
+            // Capture context for AI enhancement if enabled
+            if let enhancementService = enhancementService, enhancementService.isEnhancementEnabled {
+                Task {
+                    await enhancementService.captureClipboardContext()
+                    await enhancementService.captureScreenContext()
+                }
+            }
+
+            logger.notice("Realtime transcription started successfully")
+        } catch {
+            logger.error("Failed to start realtime transcription: \(error.localizedDescription)")
+            await MainActor.run {
+                NotificationManager.shared.showNotification(
+                    title: "リアルタイム文字起こしの開始に失敗しました",
+                    type: .error
+                )
+                recordingState = .idle
+                isRealtimeMode = false
+            }
+        }
+    }
+
+    /// Stop realtime transcription and finalize
+    private func stopRealtimeTranscription() async {
+        logger.notice("Stopping realtime transcription")
+
+        // Stop the service and get final text
+        let finalText = await realtimeTranscriptionService.stopRealtimeTranscription()
+
+        await MainActor.run {
+            SoundManager.shared.playStopSound(delay: 0.2)
+        }
+
+        if shouldCancelRecording {
+            await MainActor.run {
+                recordingState = .idle
+                isRealtimeMode = false
+                realtimeTranscriptionText = ""
+            }
+            await cleanupModelResources()
+            return
+        }
+
+        // Create transcription object
+        guard let recordedFile = recordedFile else {
+            logger.error("No recorded file found")
+            await MainActor.run {
+                recordingState = .idle
+                isRealtimeMode = false
+            }
+            return
+        }
+
+        let audioAsset = AVURLAsset(url: recordedFile)
+        let duration = (try? await CMTimeGetSeconds(audioAsset.load(.duration))) ?? 0.0
+
+        let transcription = Transcription(
+            text: finalText,
+            duration: duration,
+            audioFileURL: recordedFile.absoluteString,
+            transcriptionStatus: .completed
+        )
+
+        transcription.transcriptionModelName = currentTranscriptionModel?.displayName
+        transcription.transcriptionModelProvider = currentTranscriptionModel?.provider.rawValue
+
+        // Record PowerMode info
+        let powerMode = PowerModeManager.shared
+        if let activeConfig = powerMode.currentActiveConfiguration {
+            transcription.activePowerModeConfig = activeConfig.id
+            transcription.powerModeName = activeConfig.name
+            transcription.powerModeEmoji = activeConfig.emoji
+        }
+
+        modelContext.insert(transcription)
+        try? modelContext.save()
+
+        // Apply AI enhancement if enabled
+        if let enhancementService = enhancementService,
+           enhancementService.isEnhancementEnabled,
+           enhancementService.isConfigured {
+            await MainActor.run {
+                recordingState = .enhancing
+            }
+
+            do {
+                let (enhancedText, enhancementDuration, promptName) = try await enhancementService.enhance(finalText)
+                transcription.enhancedText = enhancedText
+                transcription.aiEnhancementModelName = enhancementService.getAIService()?.currentModel
+                transcription.promptName = promptName
+                transcription.enhancementDuration = enhancementDuration
+                transcription.aiRequestSystemMessage = enhancementService.lastSystemMessageSent
+                transcription.aiRequestUserMessage = enhancementService.lastUserMessageSent
+
+                // Paste enhanced text
+                let textToPaste = enhancedText + (UserDefaults.standard.bool(forKey: "AppendTrailingSpace") ? " " : "")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    CursorPaster.pasteAtCursor(textToPaste)
+
+                    if let activeConfig = powerMode.currentActiveConfiguration, activeConfig.isAutoSendEnabled {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            CursorPaster.pressEnter()
+                        }
+                    }
+                }
+            } catch {
+                logger.error("AI enhancement failed: \(error.localizedDescription)")
+                transcription.enhancedText = "Enhancement failed: \(error)"
+
+                // Paste original text on enhancement failure
+                let textToPaste = finalText + (UserDefaults.standard.bool(forKey: "AppendTrailingSpace") ? " " : "")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    CursorPaster.pasteAtCursor(textToPaste)
+                }
+            }
+        } else {
+            // Paste original text without enhancement
+            let textToPaste = finalText + (UserDefaults.standard.bool(forKey: "AppendTrailingSpace") ? " " : "")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                CursorPaster.pasteAtCursor(textToPaste)
+
+                if let activeConfig = powerMode.currentActiveConfiguration, activeConfig.isAutoSendEnabled {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        CursorPaster.pressEnter()
+                    }
+                }
+            }
+        }
+
+        // Save and notify
+        try? modelContext.save()
+        NotificationCenter.default.post(name: .transcriptionCompleted, object: transcription)
+
+        // Reset state
+        await MainActor.run {
+            recordingState = .idle
+            isRealtimeMode = false
+            realtimeTranscriptionText = ""
+        }
+
         await dismissMiniRecorder()
     }
 }
