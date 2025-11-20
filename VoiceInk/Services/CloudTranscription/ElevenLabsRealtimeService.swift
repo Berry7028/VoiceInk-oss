@@ -24,7 +24,7 @@ class ElevenLabsRealtimeService: @unchecked Sendable {
 
     // MARK: - WebSocket接続
 
-    func connect(model: String = "scribe_v2_realtime", language: String = "en") async throws {
+    func connect(model: String = "scribe_v2", language: String = "en") async throws {
         logger.info("Connecting to ElevenLabs Realtime API with model: \(model)")
 
         let queryParams = "model_id=\(model)&language_code=\(language)&commit_strategy=vad"

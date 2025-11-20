@@ -8,8 +8,8 @@ extension WhisperState {
     func setupRealtimeTranscription() async {
         guard let model = currentTranscriptionModel as? CloudModel,
               model.provider == .elevenLabs,
-              model.name.contains("scribe_v2_realtime") else {
-            logger.info("Current model is not ElevenLabs Scribe v2 Realtime, skipping realtime setup")
+              model.name == "scribe_v2" else {
+            logger.info("Current model is not ElevenLabs Scribe v2, skipping realtime setup")
             return
         }
 
@@ -55,7 +55,7 @@ extension WhisperState {
         // Connect to WebSocket
         do {
             let language = UserDefaults.standard.string(forKey: "SelectedLanguage") ?? "en"
-            try await realtimeService?.connect(model: "scribe_v2_realtime", language: language)
+            try await realtimeService?.connect(model: "scribe_v2", language: language)
         } catch {
             logger.error("Failed to connect to realtime service: \(error.localizedDescription)")
             miniRecorderError = "Connection failed"

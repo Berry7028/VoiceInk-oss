@@ -262,7 +262,7 @@ class WhisperState: NSObject, ObservableObject {
 
     private func isRealtimeTranscriptionModel() -> Bool {
         guard let model = currentTranscriptionModel as? CloudModel else { return false }
-        return model.provider == .elevenLabs && model.name.contains("scribe_v2_realtime")
+        return model.provider == .elevenLabs && model.name == "scribe_v2"
     }
     
     private func transcribeAudio(on transcription: Transcription) async {
