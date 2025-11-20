@@ -31,7 +31,7 @@ class ElevenLabsRealtimeService: @unchecked Sendable {
         let token = try await getRealtimeToken()
         logger.info("Obtained realtime token for authentication")
 
-        let queryParams = "model_id=\(model)&language_code=\(language)&commit_strategy=vad"
+        let queryParams = "model_id=\(model)&language_code=\(language)&commit_strategy=vad&token=\(token)"
         guard let url = URL(string: "wss://api.elevenlabs.io/v1/speech-to-text/realtime?\(queryParams)") else {
             let error = "Invalid WebSocket URL"
             logger.error("Error: \(error)")
@@ -40,7 +40,6 @@ class ElevenLabsRealtimeService: @unchecked Sendable {
         }
 
         var request = URLRequest(url: url)
-        request.setValue(token, forHTTPHeaderField: "Authorization")
 
         webSocket = URLSession.shared.webSocketTask(with: request)
         webSocket?.resume()
