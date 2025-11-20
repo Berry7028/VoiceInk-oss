@@ -31,20 +31,20 @@ extension WhisperState {
             }
         }
 
-        realtimeService?.onPartialTranscript = { [weak self] text in
+        realtimeService?.onPartialTranscript = { [weak self] (text: String) in
             await MainActor.run {
                 self?.updateRealtimeTranscript(text: text, isPartial: true)
             }
         }
 
-        realtimeService?.onCommittedTranscript = { [weak self] text in
+        realtimeService?.onCommittedTranscript = { [weak self] (text: String) in
             await MainActor.run {
                 self?.updateRealtimeTranscript(text: text, isPartial: false)
                 self?.committedTextBuffer.append(text)
             }
         }
 
-        realtimeService?.onError = { [weak self] errorMessage in
+        realtimeService?.onError = { [weak self] (errorMessage: String) in
             await MainActor.run {
                 self?.logger.error("Realtime transcription error: \(errorMessage)")
                 self?.miniRecorderError = errorMessage
