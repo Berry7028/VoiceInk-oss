@@ -55,7 +55,7 @@ extension WhisperState {
         // Connect to WebSocket
         do {
             let language = UserDefaults.standard.string(forKey: "SelectedLanguage") ?? "en"
-            try await realtimeService?.connect(model: "scribe_v2", language: language)
+            try await realtimeService?.connect(modelId: "scribe_v2_realtime", languageCode: language)
         } catch {
             logger.error("Failed to connect to realtime service: \(error.localizedDescription)")
             miniRecorderError = "Connection failed"

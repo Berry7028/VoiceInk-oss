@@ -24,14 +24,14 @@ class ElevenLabsRealtimeService: @unchecked Sendable {
     
     // MARK: - WebSocket接続
     
-    func connect(model: String = "scribe_v2", language: String = "en") async throws {
-        logger.info("Connecting to ElevenLabs Realtime API with model: \(model)")
+    func connect(modelId: String = "scribe_v2_realtime", languageCode: String = "en") async throws {
+        logger.info("Connecting to ElevenLabs Realtime API with model: \(modelId)")
         
         // Get single-use token for authentication (required for WebSocket connections)
         let token = try await getRealtimeToken()
         logger.info("Obtained realtime token for authentication")
         
-        let queryParams = "model_id=\(model)&language=\(language)&audio_format=pcm_16000&token=\(token)"
+        let queryParams = "model_id=\(modelId)&language_code=\(languageCode)&audio_format=pcm_16000&token=\(token)"
         guard let url = URL(string: "wss://api.elevenlabs.io/v1/speech-to-text/realtime?\(queryParams)") else {
             let error = "Invalid WebSocket URL"
             logger.error("Error: \(error)")
