@@ -475,9 +475,18 @@ struct ConfigurationView: View {
                                 get: {
                                     if let providerName = selectedAIProvider,
                                        let provider = AIProvider(rawValue: providerName) {
-                                        return provider
+                                        // Check if this provider is in available list, otherwise use first available
+                                        let availableProviders = aiService.connectedProviders.filter { $0 != .elevenLabs && $0 != .deepgram }
+                                        if availableProviders.contains(provider) {
+                                            return provider
+                                        }
+                                        return availableProviders.first ?? aiService.selectedProvider
                                     }
-                                    return aiService.selectedProvider
+                                    let availableProviders = aiService.connectedProviders.filter { $0 != .elevenLabs && $0 != .deepgram }
+                                    if availableProviders.contains(aiService.selectedProvider) {
+                                        return aiService.selectedProvider
+                                    }
+                                    return availableProviders.first ?? aiService.selectedProvider
                                 },
                                 set: { newValue in
                                     selectedAIProvider = newValue.rawValue
