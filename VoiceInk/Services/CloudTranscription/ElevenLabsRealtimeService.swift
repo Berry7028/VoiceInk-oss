@@ -27,7 +27,11 @@ class ElevenLabsRealtimeService: @unchecked Sendable {
     func connect(model: String = "scribe_v2", language: String = "en") async throws {
         logger.info("Connecting to ElevenLabs Realtime API with model: \(model)")
 
-        let queryParams = "model_id=\(model)&language_code=\(language)&commit_strategy=vad&api_key=\(apiKey)"
+        // Get single-use token for authentication
+        let token = try await getRealtimeToken()
+        logger.info("Obtained realtime token for authentication")
+
+        let queryParams = "model_id=\(model)&language_code=\(language)&commit_strategy=vad"
         guard let url = URL(string: "wss://api.elevenlabs.io/v1/speech-to-text/realtime?\(queryParams)") else {
             let error = "Invalid WebSocket URL"
             logger.error("Error: \(error)")
@@ -36,6 +40,7 @@ class ElevenLabsRealtimeService: @unchecked Sendable {
         }
 
         var request = URLRequest(url: url)
+        request.setValue(token, forHTTPHeaderField: "Authorization")
 
         webSocket = URLSession.shared.webSocketTask(with: request)
         webSocket?.resume()
@@ -218,6 +223,50 @@ class ElevenLabsRealtimeService: @unchecked Sendable {
             }
         } catch {
             logger.error("Error parsing JSON message: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Token Management
+
+    private func getRealtimeToken() async throws -> String {
+        let url = URL(string: "https://api.elevenlabs.io/v1/single-use-token/realtime_scribe")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(apiKey, forHTTPHeaderField: "xi-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        logger.info("Requesting realtime token from ElevenLabs API")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            let error = "Invalid response type"
+            logger.error("Token request error: \(error)")
+            throw NSError(domain: "ElevenLabsRealtimeService", code: -1, userInfo: [NSLocalizedDescriptionKey: error])
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let error = "Token request failed with status \(httpResponse.statusCode)"
+            logger.error("Token request error: \(error)")
+            if let errorBody = String(data: data, encoding: .utf8) {
+                logger.error("Response: \(errorBody)")
+            }
+            throw NSError(domain: "ElevenLabsRealtimeService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: error])
+        }
+
+        do {
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let token = json["token"] as? String {
+                logger.info("Successfully obtained realtime token")
+                return token
+            } else {
+                let error = "Invalid token response format"
+                logger.error("Token parsing error: \(error)")
+                throw NSError(domain: "ElevenLabsRealtimeService", code: -1, userInfo: [NSLocalizedDescriptionKey: error])
+            }
+        } catch {
+            logger.error("Error parsing token response: \(error.localizedDescription)")
+            throw error
         }
     }
 }
