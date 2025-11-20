@@ -63,7 +63,7 @@ struct NotchRecorderView: View {
             .last?.text ?? ""
 
         return Text(latestCommittedText)
-            .font(.system(size: 11, weight: .regular))
+            .font(.system(size: 10, weight: .regular))
             .lineLimit(1)
             .truncationMode(.tail)
             .foregroundColor(.white)
@@ -71,18 +71,17 @@ struct NotchRecorderView: View {
     }
 
     private var rightSection: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             // Show realtime text if available
             if whisperState.isRealtimeTranscribing && !whisperState.realtimeTranscripts.isEmpty {
                 realtimeTextDisplay
-                    .frame(maxWidth: 150)
+                    .frame(maxWidth: 100)
                     .transition(.opacity)
             }
 
-            Spacer()
             statusDisplay
         }
-        .frame(width: 64)
+        .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.trailing, 16)
     }
 
@@ -92,8 +91,7 @@ struct NotchRecorderView: View {
             audioMeter: recorder.audioMeter,
             menuBarHeight: menuBarHeight
         )
-        .frame(width: 70)
-        .padding(.trailing, 8)
+        .frame(minWidth: 50, maxWidth: 70)
     }
     
     var body: some View {
