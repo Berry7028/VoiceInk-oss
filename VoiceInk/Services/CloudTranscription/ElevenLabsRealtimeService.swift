@@ -27,7 +27,7 @@ class ElevenLabsRealtimeService: @unchecked Sendable {
     func connect(model: String = "scribe_v2", language: String = "en") async throws {
         logger.info("Connecting to ElevenLabs Realtime API with model: \(model)")
 
-        let queryParams = "model_id=\(model)&language_code=\(language)&commit_strategy=vad"
+        let queryParams = "model_id=\(model)&language_code=\(language)&commit_strategy=vad&api_key=\(apiKey)"
         guard let url = URL(string: "wss://api.elevenlabs.io/v1/speech-to-text/realtime?\(queryParams)") else {
             let error = "Invalid WebSocket URL"
             logger.error("Error: \(error)")
@@ -36,7 +36,6 @@ class ElevenLabsRealtimeService: @unchecked Sendable {
         }
 
         var request = URLRequest(url: url)
-        request.setValue(apiKey, forHTTPHeaderField: "xi-api-key")
 
         webSocket = URLSession.shared.webSocketTask(with: request)
         webSocket?.resume()
