@@ -13,10 +13,10 @@ actor ElevenLabsRealtimeService {
     private let maxReconnectAttempts = 3
 
     // コールバック
-    var onPartialTranscript: ((String) -> Void)?
-    var onCommittedTranscript: ((String) -> Void)?
-    var onError: ((String) -> Void)?
-    var onSessionStarted: (() -> Void)?
+    var onPartialTranscript: ((String) async -> Void)?
+    var onCommittedTranscript: ((String) async -> Void)?
+    var onError: ((String) async -> Void)?
+    var onSessionStarted: (() async -> Void)?
 
     init(apiKey: String) {
         self.apiKey = apiKey
@@ -174,44 +174,44 @@ actor ElevenLabsRealtimeService {
                 switch messageType {
                 case "session_started":
                     logger.info("WebSocket session started")
-                    onSessionStarted?()
+                    await onSessionStarted?()
 
                 case "partial_transcript":
                     if let result = json["result"] as? [String: Any],
                        let transcript = result["transcript"] as? String {
                         logger.debug("Partial transcript: \(transcript)")
-                        onPartialTranscript?(transcript)
+                        await onPartialTranscript?(transcript)
                     }
 
                 case "committed_transcript":
                     if let result = json["result"] as? [String: Any],
                        let transcript = result["transcript"] as? String {
                         logger.info("Committed transcript: \(transcript)")
-                        onCommittedTranscript?(transcript)
+                        await onCommittedTranscript?(transcript)
                     }
 
                 case "committed_transcript_with_timestamps":
                     if let result = json["result"] as? [String: Any],
                        let transcript = result["transcript"] as? String {
                         logger.info("Committed transcript with timestamps: \(transcript)")
-                        onCommittedTranscript?(transcript)
+                        await onCommittedTranscript?(transcript)
                     }
 
                 case "error":
                     if let error = json["error"] as? String {
                         logger.error("API error: \(error)")
-                        onError?(error)
+                        await onError?(error)
                     }
 
                 case "auth_error":
                     let errorMsg = "Authentication failed - invalid API key"
                     logger.error("Auth error: \(errorMsg)")
-                    onError?(errorMsg)
+                    await onError?(errorMsg)
 
                 case "quota_exceeded_error":
                     let errorMsg = "API quota exceeded"
                     logger.error("Quota error: \(errorMsg)")
-                    onError?(errorMsg)
+                    await onError?(errorMsg)
 
                 default:
                     logger.debug("Received message type: \(messageType ?? "unknown")")
