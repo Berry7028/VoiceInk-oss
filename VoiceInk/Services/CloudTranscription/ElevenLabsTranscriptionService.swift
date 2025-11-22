@@ -305,6 +305,10 @@ final class ElevenLabsRealtimeTranscriptionService: RealtimeTranscriptionService
                 DispatchQueue.main.async { [weak self] in
                     self?.onError?("Realtime connection closed")
                 }
+                streamingTask?.cancel()
+                streamingTask = nil
+                shouldStopStreaming = false
+                closeConnection()
                 break
             }
         }
