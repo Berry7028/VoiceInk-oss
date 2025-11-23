@@ -27,6 +27,8 @@ class WhisperState: NSObject, ObservableObject {
     @Published var clipboardMessage = ""
     @Published var miniRecorderError: String?
     @Published var shouldCancelRecording = false
+    @Published var realtimeHUDText: String = ""
+    @Published var isRealtimeHUDVisible: Bool = false
 
 
     @Published var recorderType: String = UserDefaults.standard.string(forKey: "RecorderType") ?? "mini" {
@@ -73,6 +75,9 @@ class WhisperState: NSObject, ObservableObject {
     private lazy var cloudTranscriptionService = CloudTranscriptionService()
     private lazy var nativeAppleTranscriptionService = NativeAppleTranscriptionService()
     internal lazy var parakeetTranscriptionService = ParakeetTranscriptionService()
+    fileprivate let elevenLabsRealtimeTranscriptionService = ElevenLabsRealtimeTranscriptionService()
+    fileprivate let appleSpeechRealtimeTranscriptionService = AppleSpeechRealtimeTranscriptionService()
+    fileprivate var activeRealtimeTranscriptionService: RealtimeTranscriptionServiceProtocol?
     
     private var modelUrl: URL? {
         let possibleURLs = [
@@ -115,7 +120,10 @@ class WhisperState: NSObject, ObservableObject {
         self.enhancementService = enhancementService
 
         super.init()
-        
+
+        configureRealtimeCallbacks(for: elevenLabsRealtimeTranscriptionService)
+        configureRealtimeCallbacks(for: appleSpeechRealtimeTranscriptionService)
+
         // Configure the session manager
         if let enhancementService = enhancementService {
             PowerModeSessionManager.shared.configure(whisperState: self, enhancementService: enhancementService)
@@ -130,6 +138,32 @@ class WhisperState: NSObject, ObservableObject {
         loadAvailableModels()
         loadCurrentTranscriptionModel()
         refreshAllAvailableModels()
+    }
+
+    private func configureRealtimeCallbacks(for service: RealtimeTranscriptionServiceProtocol) {
+        service.onTextUpdate = { [weak self] text in
+            Task { @MainActor in
+                self?.realtimeHUDText = text
+            }
+        }
+
+        service.onConnectionStateChange = { [weak self] isActive in
+            Task { @MainActor in
+                self?.isRealtimeHUDVisible = isActive
+                if !isActive {
+                    self?.realtimeHUDText = ""
+                }
+            }
+        }
+
+        service.onError = { [weak self] message in
+            Task { @MainActor in
+                NotificationManager.shared.showNotification(
+                    title: message,
+                    type: .error
+                )
+            }
+        }
     }
     
     private func createRecordingsDirectoryIfNeeded() {
@@ -196,6 +230,22 @@ class WhisperState: NSObject, ObservableObject {
                             await MainActor.run {
                                 self.recordingState = .recording
                             }
+
+                            if let model = self.currentTranscriptionModel,
+                               let realtimeService = self.realtimeService(for: model) {
+                                do {
+                                    self.activeRealtimeTranscriptionService = realtimeService
+                                    try await realtimeService.startSession(audioFileURL: permanentURL, modelName: model.name)
+                                } catch {
+                                    self.activeRealtimeTranscriptionService = nil
+                                    await MainActor.run {
+                                        NotificationManager.shared.showNotification(
+                                            title: "Realtime session failed: \(error.localizedDescription)",
+                                            type: .error
+                                        )
+                                    }
+                                }
+                            }
                             
                             await ActiveWindowService.shared.applyConfigurationForCurrentApp()
          
@@ -235,6 +285,26 @@ class WhisperState: NSObject, ObservableObject {
     
     private func requestRecordPermission(response: @escaping (Bool) -> Void) {
         response(true)
+    }
+
+    private func isRealtimeElevenLabsModel(_ model: any TranscriptionModel) -> Bool {
+        guard model.provider == .elevenLabs else { return false }
+        let normalized = model.name.lowercased()
+        return normalized == "scribe_v2_realtime" || normalized == "realtime_trans"
+    }
+
+    private func isRealtimeAppleModel(_ model: any TranscriptionModel) -> Bool {
+        return model.provider == .nativeApple && model.name == "apple-speech-realtime"
+    }
+
+    private func realtimeService(for model: any TranscriptionModel) -> RealtimeTranscriptionServiceProtocol? {
+        if isRealtimeElevenLabsModel(model) {
+            return elevenLabsRealtimeTranscriptionService
+        }
+        if isRealtimeAppleModel(model) {
+            return appleSpeechRealtimeTranscriptionService
+        }
+        return nil
     }
     
     private func transcribeAudio(on transcription: Transcription) async {
@@ -290,20 +360,30 @@ class WhisperState: NSObject, ObservableObject {
                 throw WhisperStateError.transcriptionFailed
             }
 
-            let transcriptionService: TranscriptionService
-            switch model.provider {
-            case .local:
-                transcriptionService = localTranscriptionService
-            case .parakeet:
-                transcriptionService = parakeetTranscriptionService
-            case .nativeApple:
-                transcriptionService = nativeAppleTranscriptionService
-            default:
-                transcriptionService = cloudTranscriptionService
-            }
-
             let transcriptionStart = Date()
-            var text = try await transcriptionService.transcribe(audioURL: url, model: model)
+            var text: String
+
+            if let realtimeService = activeRealtimeTranscriptionService, realtimeService.isSessionActive {
+                text = await realtimeService.finishSession()
+                activeRealtimeTranscriptionService = nil
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    logger.error("Realtime session returned empty transcript, falling back to provider API")
+                    text = try await fallbackTranscription(for: model, url: url)
+                }
+            } else {
+                let transcriptionService: TranscriptionService
+                switch model.provider {
+                case .local:
+                    transcriptionService = localTranscriptionService
+                case .parakeet:
+                    transcriptionService = parakeetTranscriptionService
+                case .nativeApple:
+                    transcriptionService = nativeAppleTranscriptionService
+                default:
+                    transcriptionService = cloudTranscriptionService
+                }
+                text = try await transcriptionService.transcribe(audioURL: url, model: model)
+            }
             logger.notice("📝 Raw transcript: \(text, privacy: .public)")
             text = TranscriptionOutputFilter.filter(text)
             logger.notice("📝 Output filter result: \(text, privacy: .public)")
@@ -421,7 +501,18 @@ class WhisperState: NSObject, ObservableObject {
     func getEnhancementService() -> AIEnhancementService? {
         return enhancementService
     }
-    
+
+    func cancelRealtimeSessionIfNeeded() async {
+        if let service = activeRealtimeTranscriptionService {
+            await service.cancelSession()
+            activeRealtimeTranscriptionService = nil
+        }
+        await MainActor.run {
+            isRealtimeHUDVisible = false
+            realtimeHUDText = ""
+        }
+    }
+
     private func checkCancellationAndCleanup() async -> Bool {
         if shouldCancelRecording {
             await cleanupModelResources()
@@ -432,5 +523,16 @@ class WhisperState: NSObject, ObservableObject {
 
     private func cleanupAndDismiss() async {
         await dismissMiniRecorder()
+    }
+    
+    private func fallbackTranscription(for model: any TranscriptionModel, url: URL) async throws -> String {
+        switch model.provider {
+        case .elevenLabs:
+            return try await cloudTranscriptionService.transcribe(audioURL: url, model: model)
+        case .nativeApple:
+            return try await nativeAppleTranscriptionService.transcribe(audioURL: url, model: model)
+        default:
+            throw WhisperStateError.transcriptionFailed
+        }
     }
 }

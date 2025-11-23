@@ -1,17 +1,28 @@
 import SwiftUI
 import AppKit
+import Combine
 
+@MainActor
 class MiniWindowManager: ObservableObject {
     @Published var isVisible = false
     private var windowController: NSWindowController?
     private var miniPanel: MiniRecorderPanel?
     private let whisperState: WhisperState
     private let recorder: Recorder
-    
+    private var cancellables = Set<AnyCancellable>()
+
     init(whisperState: WhisperState, recorder: Recorder) {
         self.whisperState = whisperState
         self.recorder = recorder
         setupNotifications()
+
+        whisperState.$isRealtimeHUDVisible
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isVisible in
+                guard let panel = self?.miniPanel else { return }
+                panel.updateRealtimeOverlayVisibility(isVisible, animated: true)
+            }
+            .store(in: &cancellables)
     }
     
     deinit {
@@ -37,6 +48,7 @@ class MiniWindowManager: ObservableObject {
 
         initializeWindow(screen: activeScreen)
         self.isVisible = true
+        miniPanel?.updateRealtimeOverlayVisibility(whisperState.isRealtimeHUDVisible, animated: false)
         miniPanel?.show()
     }
 
@@ -53,8 +65,8 @@ class MiniWindowManager: ObservableObject {
     private func initializeWindow(screen: NSScreen) {
         deinitializeWindow()
         
-        let metrics = MiniRecorderPanel.calculateWindowMetrics()
-        let panel = MiniRecorderPanel(contentRect: metrics)
+        let metrics = MiniRecorderPanel.calculateWindowMetrics(showingRealtimeOverlay: whisperState.isRealtimeHUDVisible)
+        let panel = MiniRecorderPanel(contentRect: metrics, showingRealtimeOverlay: whisperState.isRealtimeHUDVisible)
         
         let miniRecorderView = MiniRecorderView(whisperState: whisperState, recorder: recorder)
             .environmentObject(self)

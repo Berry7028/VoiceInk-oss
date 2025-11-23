@@ -2,10 +2,10 @@ import SwiftUI
 import AppKit
 
 class MiniRecorderPanel: NSPanel {
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
-    
-    init(contentRect: NSRect) {
+    private var isRealtimeOverlayVisible: Bool
+
+    init(contentRect: NSRect, showingRealtimeOverlay: Bool) {
+        self.isRealtimeOverlayVisible = showingRealtimeOverlay
         super.init(
             contentRect: contentRect,
             styleMask: [.nonactivatingPanel, .fullSizeContentView],
@@ -14,6 +14,9 @@ class MiniRecorderPanel: NSPanel {
         )
         configurePanel()
     }
+
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
     
     private func configurePanel() {
         isFloatingPanel = true
@@ -30,13 +33,15 @@ class MiniRecorderPanel: NSPanel {
         standardWindowButton(.closeButton)?.isHidden = true
     }
     
-    static func calculateWindowMetrics() -> NSRect {
+    static func calculateWindowMetrics(showingRealtimeOverlay: Bool) -> NSRect {
         guard let screen = NSScreen.main else {
-            return NSRect(x: 0, y: 0, width: 184, height: 40)
+            let fallbackWidth: CGFloat = showingRealtimeOverlay ? 332 : 184
+            let fallbackHeight: CGFloat = showingRealtimeOverlay ? 204 : 36
+            return NSRect(x: 0, y: 0, width: fallbackWidth, height: fallbackHeight)
         }
 
-        let width: CGFloat = 184
-        let height: CGFloat = 40
+        let width: CGFloat = showingRealtimeOverlay ? 332 : 184
+        let height: CGFloat = showingRealtimeOverlay ? 204 : 36
         let padding: CGFloat = 24
 
         let visibleFrame = screen.visibleFrame
@@ -53,12 +58,18 @@ class MiniRecorderPanel: NSPanel {
     }
     
     func show() {
-        let metrics = MiniRecorderPanel.calculateWindowMetrics()
+        let metrics = MiniRecorderPanel.calculateWindowMetrics(showingRealtimeOverlay: isRealtimeOverlayVisible)
         setFrame(metrics, display: true)
         orderFrontRegardless()
+    }
+
+    func updateRealtimeOverlayVisibility(_ isVisible: Bool, animated: Bool) {
+        isRealtimeOverlayVisible = isVisible
+        let metrics = MiniRecorderPanel.calculateWindowMetrics(showingRealtimeOverlay: isVisible)
+        setFrame(metrics, display: true, animate: animated)
     }
     
     func hide(completion: @escaping () -> Void) {
         completion()
     }
-} 
+}

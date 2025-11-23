@@ -86,6 +86,13 @@ import Foundation
             isMultilingualModel: true,
             supportedLanguages: getLanguageDictionary(isMultilingual: true, provider: .nativeApple)
         ),
+        NativeAppleModel(
+            name: "apple-speech-realtime",
+            displayName: "Apple Speech Realtime",
+            description: "Apple Speech with realtime transcription previews. Requires macOS 26.",
+            isMultilingualModel: true,
+            supportedLanguages: getLanguageDictionary(isMultilingual: true, provider: .nativeApple)
+        ),
         
         // Parakeet Models
         ParakeetModel(
@@ -203,7 +210,7 @@ import Foundation
             isMultilingual: true,
             supportedLanguages: getLanguageDictionary(isMultilingual: true, provider: .groq)
         ),
-        CloudModel(
+       CloudModel(
            name: "scribe_v1",
            displayName: "Scribe v1 (ElevenLabs)",
            description: "ElevenLabs' Scribe model for fast and accurate transcription.",
@@ -223,6 +230,16 @@ import Foundation
            isMultilingual: true,
            supportedLanguages: getLanguageDictionary(isMultilingual: true, provider: .elevenLabs)
        ),
+        CloudModel(
+            name: "realtime_trans",
+            displayName: "Scribe v2 Realtime (ElevenLabs)",
+            description: "ElevenLabs' realtime Scribe model with ultra-low latency transcription.",
+            provider: .elevenLabs,
+            speed: 0.95,
+            accuracy: 0.99,
+            isMultilingual: true,
+            supportedLanguages: getLanguageDictionary(isMultilingual: true, provider: .elevenLabs)
+        ),
        CloudModel(
            name: "nova-2",
            displayName: "Nova (Deepgram)",

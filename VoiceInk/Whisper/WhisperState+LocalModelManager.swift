@@ -337,6 +337,7 @@ extension WhisperState {
     // MARK: - Resource Management
     
     func cleanupModelResources() async {
+        await cancelRealtimeSessionIfNeeded()
         await whisperContext?.releaseResources()
         whisperContext = nil
         isModelLoaded = false
