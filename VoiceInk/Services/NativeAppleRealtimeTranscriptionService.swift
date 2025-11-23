@@ -19,6 +19,8 @@ final class AppleSpeechRealtimeTranscriptionService: RealtimeTranscriptionServic
     private var committedTextStorage: String = ""
     private var partialTextStorage: String = ""
     private let audioFormat: AVAudioFormat? = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: false)
+    private var recognitionCompletionContinuation: CheckedContinuation<Void, Never>?
+    private var recognitionDidComplete = false
 
     var onTextUpdate: ((String) -> Void)?
     var onConnectionStateChange: ((Bool) -> Void)?
@@ -59,11 +61,15 @@ final class AppleSpeechRealtimeTranscriptionService: RealtimeTranscriptionServic
                 DispatchQueue.main.async { [weak self] in
                     self?.onError?(error.localizedDescription)
                 }
+                self.signalRecognitionCompletion()
             }
 
             if let result {
                 let text = result.bestTranscription.formattedString
                 self.updateTranscript(committed: result.isFinal ? text : nil, partial: result.isFinal ? nil : text)
+                if result.isFinal {
+                    self.signalRecognitionCompletion()
+                }
             }
         }
 
@@ -85,7 +91,7 @@ final class AppleSpeechRealtimeTranscriptionService: RealtimeTranscriptionServic
         streamingTask = nil
 
         recognitionRequest?.endAudio()
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        await waitForRecognitionCompletion()
         recognitionTask = nil
         recognitionRequest = nil
 
@@ -103,6 +109,7 @@ final class AppleSpeechRealtimeTranscriptionService: RealtimeTranscriptionServic
         streamingTask?.cancel()
         streamingTask = nil
         recognitionTask?.cancel()
+        signalRecognitionCompletion()
         recognitionTask = nil
         recognitionRequest = nil
         cleanup()
@@ -219,10 +226,31 @@ final class AppleSpeechRealtimeTranscriptionService: RealtimeTranscriptionServic
         }
     }
 
+    private func signalRecognitionCompletion() {
+        recognitionDidComplete = true
+        recognitionCompletionContinuation?.resume()
+        recognitionCompletionContinuation = nil
+    }
+
+    private func waitForRecognitionCompletion() async {
+        guard recognitionTask != nil else { return }
+        if recognitionDidComplete {
+            recognitionDidComplete = false
+            return
+        }
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            recognitionCompletionContinuation = continuation
+        }
+        recognitionDidComplete = false
+    }
+
     private func cleanup() {
         audioFileURL = nil
         streamReadOffset = 0
         shouldStopStreaming = false
+        recognitionCompletionContinuation = nil
+        recognitionDidComplete = false
         transcriptQueue.async(flags: .barrier) { [weak self] in
             self?.committedTextStorage = ""
             self?.partialTextStorage = ""

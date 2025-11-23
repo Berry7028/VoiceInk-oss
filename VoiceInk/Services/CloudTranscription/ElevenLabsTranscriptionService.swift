@@ -308,7 +308,14 @@ final class ElevenLabsRealtimeTranscriptionService: RealtimeTranscriptionService
                 streamingTask?.cancel()
                 streamingTask = nil
                 shouldStopStreaming = false
-                closeConnection()
+
+                receiveTask?.cancel()
+                receiveTask = nil
+                webSocketTask?.cancel(with: .goingAway, reason: nil)
+                webSocketTask = nil
+                DispatchQueue.main.async { [weak self] in
+                    self?.onConnectionStateChange?(false)
+                }
                 break
             }
         }
