@@ -26,7 +26,8 @@ healthcheck: check
 whisper:
 	@if [ ! -d "$(FRAMEWORK_PATH)" ]; then \
 		echo "Building whisper.xcframework..."; \
-		if [ ! -d "$(WHISPER_CPP_DIR)" ]; then \
+		if [ ! -d "$(WHISPER_CPP_DIR)/.git" ]; then \
+			rm -rf $(WHISPER_CPP_DIR); \
 			git clone https://github.com/ggerganov/whisper.cpp.git $(WHISPER_CPP_DIR); \
 		else \
 			(cd $(WHISPER_CPP_DIR) && git pull); \
