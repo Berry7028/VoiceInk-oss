@@ -11,10 +11,25 @@ on:
 jobs:
   build:
     runs-on: macos-latest
+    env:
+      WHISPER_CPP_DIR: ${{ github.workspace }}/../whisper.cpp
+      WHISPER_FRAMEWORK: ${{ github.workspace }}/../whisper.cpp/build-apple/whisper.xcframework
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Ensure whisper cache directory exists
+      run: mkdir -p "$WHISPER_CPP_DIR"
+
+    - name: Restore whisper.xcframework cache
+      id: whisper-cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.WHISPER_CPP_DIR }}
+        key: whisper-${{ runner.os }}-${{ hashFiles('Makefile', '.github/workflows/build-and-release.yml') }}
+        restore-keys: |
+          whisper-${{ runner.os }}-
 
     - name: Setup Xcode
       uses: maxim-lobanov/setup-xcode@v1
