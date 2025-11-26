@@ -2172,5 +2172,3 @@ Word Error Rate (WER) is a key metric used to evaluate the accuracy of transcrip
     ElevenLabs charges for speech to text based on the duration of the audio sent for transcription. Billing is calculated per hour of audio, with rates varying by tier and model. See the [pricing section](/docs/capabilities/speech-to-text#pricing) above for detailed pricing information.
   </Accordion>
 </AccordionGroup>
-
-
