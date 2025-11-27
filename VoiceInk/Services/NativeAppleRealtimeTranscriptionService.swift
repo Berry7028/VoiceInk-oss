@@ -5,6 +5,7 @@ import os
 #if canImport(Speech)
 import Speech
 
+@unchecked Sendable
 final class AppleSpeechRealtimeTranscriptionService: RealtimeTranscriptionServiceProtocol {
     private let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "AppleSpeechRealtime" )
     private var streamingTask: Task<Void, Never>?
@@ -324,6 +325,7 @@ final class AppleSpeechRealtimeTranscriptionService: RealtimeTranscriptionServic
 
 #else
 
+@unchecked Sendable
 final class AppleSpeechRealtimeTranscriptionService: RealtimeTranscriptionServiceProtocol {
     var onTextUpdate: ((String) -> Void)?
     var onConnectionStateChange: ((Bool) -> Void)?

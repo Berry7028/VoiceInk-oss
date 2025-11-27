@@ -66,9 +66,9 @@ enum BrowserType {
         case .comet: return "Comet"
         }
     }
-    
+
     static var allCases: [BrowserType] {
-        [.safari, .arc, .chrome, .edge, .brave, .opera, .vivaldi, .orion, .yandex .comet]
+        [.safari, .arc, .chrome, .edge, .brave, .opera, .vivaldi, .orion, .yandex, .comet]
     }
     
     static var installedBrowsers: [BrowserType] {
